@@ -34,8 +34,9 @@
 // CONSTANTS
 // ----------------------------------------------------------------------------
 
+const bool activeTone = true; //If a tone will play while recording data
 int startupTime = 30; //seconds
-const int readingInterval = 10; //ms
+const int readingInterval = 15; //ms (15ms is about as fast as the sd card can write)
 const String header = "Time (ms),TMP36 (Raw),Voltage (Raw),Pressure (Raw), Accel X (Raw), Accel Y (Raw), Accel Z (Raw)";
 const String defaultDataFileName = "data";
 String dataPath = defaultDataFileName + ".csv"; //ok not a constant cause this needs to be changed
@@ -120,19 +121,22 @@ void setup() {
   noTone(BUZZER);
 
   //Countdown timer until sensors start recording
-  delay(2000);
   tone(BUZZER, 500, 100);
-  int actualTime = (startupTime*1000)+(millis());
+  delay(2000);
+  int actualTime = ((startupTime*1000)+(millis()));
+  Serial.println(actualTime);
   i = 15;
   while (millis() < actualTime) { //Will run the loop until the startup time has elapsed
     tone(BUZZER, 500, 50); //Beep
-    digitalWrite(LED_3, HIGH);
-    delay(startupTime/i); //Delay by a fraction of the startup time
-    digitalWrite(LED_3, LOW);
-    if ((startupTime/(i*2)) < 50) { //Time between beeps gets smaller and smaller until it is below 50ms 
-      i = (i*2);
+    digitalWrite(LED_3, !digitalRead(LED_3));
+    delay((startupTime*1000)/i); //Delay by a fraction of the startup time
+    if (((startupTime*1000)/(i*2)) > 50) { //Time between beeps gets smaller and smaller until it is below 50ms 
+      i = (i*1.1);
     }
   }
+  if (activeTone) {
+    tone(BUZZER, 500); //Tone to show that it's recording
+  } 
 }
 
 void loop() {
@@ -149,15 +153,14 @@ void loop() {
     }
   } else {
     while (1) { //Yes this is a loop inside of a loop but I had to do it so the SD card can be closed.
-      if (millis() % readingInterval == 0) { //Take readings every 10ms
+      if (millis() % readingInterval <= 1) { //Take readings every reading interval + or - 1ms
         String data = takeReadings();
         dataFile.println(data);
         dataFile.flush(); //Writes data from buffer to the SD card without having to close and reopen it
       }
-
-      if (millis() % 100 == 0) {
-        digitalWrite(LED_1, !digitalRead(LED_1)); //Heartbeat LED
-      }
+      //if (millis() % 500 <= 1) { //Heartbeat LED
+        //digitalWrite(LED_1, !digitalRead(LED_1));
+      //}
     }
     dataFile.close();
   }
