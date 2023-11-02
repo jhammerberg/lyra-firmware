@@ -1,112 +1,197 @@
-// These are the pins your MicroSD Card Adapter will be connected to.
-// These pins are specific and should not change. You do not need to worry
-// about why these are the pins, just connect them as listed.
-// MOSI - pin 11
-// MISO - pin 12
-// CLK  - pin 13
-// CS   - pin 10
-const int chipSelect = 10;
-
-// This is the pin your Pressure Sensor is connected to.
-// Change this as needed.
-const int presPin = A2;
-
-// This is the pin your TMP36 is connected to.
-// Change this as needed.
-const int tmpPin = A1;
-
-// This is the pin your voltage divider is connected to.
-// Change this as needed.
-const int vDivPin = A0;
-
-// Accelerometer Pins (X,Y,Z)
-const int aX = A5;
-const int aY = A4;
-const int aZ = A3;
-
-// For future labs, you may find it helpful to copy the above settings for additional sensors.
-// **HINT HINT WINK WINK**
-
-// This is the string that goes at the top of your csv file. It is the column headers for your spreadsheet.
-// You can change this as needed.
-const String header = "Time (ms),TMP36 (Raw),Pressure (Raw), Accel Z (Raw),Accel Y (Raw), Accel X (Raw), Voltage (Raw)";
+// LIBRARY IMPORTS
+// ----------------------------------------------------------------------------
+// Do not touch unless your custom sensor needs an additional library
 
 #include <SPI.h>
 #include <SD.h>
 
+// ----------------------------------------------------------------------------
+
+// PIN DEFINITIONS
+// ----------------------------------------------------------------------------
+// Note: the pins each thing is connected to may have changed. You will need to
+// reference the schematic for the rocket board here:
+// https://980.engr100.org/project/sensor-board.html
+
+// put pin definitions here
+
+#define PRES_PIN A0
+#define IMU_X A1
+#define IMU_Y A2
+#define IMU_Z A3
+#define BAT_PIN A6
+#define TMP_PIN A7
+#define SD_CS 10
+#define LED_1 4
+#define LED_2 5
+#define LED_3 6
+#define LED_4 7
+#define LED_5 8
+#define LED_6 9
+#define BUZZER 3
+
+// ----------------------------------------------------------------------------
+
+
+
+// CSV FILE HEADER
+// ----------------------------------------------------------------------------
+// This is the string that goes at the top of your csv file. It is the column 
+// headers for your spreadsheet. You can/should it to match your analog sensors
+
+const int readingInterval = 10; //ms
+const String header = "Time (ms),TMP36 (Raw),Voltage (Raw),Pressure (Raw), Accel X (Raw), Accel Y (Raw), Accel Z (Raw)";
+const String defaultDataFileName = "data";
+String dataPath = defaultDataFileName + ".csv";
+bool firstBoot = true;
+
+// ----------------------------------------------------------------------------
+
+// HELPER FUNCTIONS
+// ----------------------------------------------------------------------------
+// Functions to call to make setup() and loop() simpler.
+
+// --------------------------Tone function (built-in)--------------------------
+// Play a 1000Hz tone on the buzzer for 2000ms:
+// tone(buzzerPin, 1000, 2000);
+// Play a 440Hz (A4) tone on the buzzer:
+// tone(buzzerPin, 440);
+// This plays until either a new tone is passed
+// or until notone is called:
+// noTone(buzzerPin);
+
+// ----------------------------------------------------------------------------
+
+
 void setup() {
+    //Digital outputs
+    pinMode(BUZZER, OUTPUT);
+    pinMode(LED_1, OUTPUT);
+    pinMode(LED_2, OUTPUT);
+    pinMode(LED_3, OUTPUT);
+    pinMode(LED_4, OUTPUT);
+    pinMode(LED_5, OUTPUT);
+    pinMode(LED_6, OUTPUT);
+
     Serial.begin(9600);
+    delay(100); // Delay for serial monitor
 
-    delay(100); // arbitrary delay to let the serial monitor start up
     Serial.print("Initializing SD card...");
-
-    // see if the card is present and can be initialized:
-    if (!SD.begin(chipSelect)) {
+    if (!SD.begin(SD_CS)) {
         Serial.println("Card failed, or not present");
-        // don't do anything more:
-        while (1);
+        while (1) { //Warning if the SD Card isn't found
+            tone(BUZZER, 1000, 2000);
+            digitalWrite(LED_2, HIGH);
+            delay(2000);
+            noTone(BUZZER);
+            digitalWrite(LED_2, LOW);
+            delay(2000);
+        }
     }
-    Serial.println("card initialized.");
+    Serial.println("Card initialized.");
 
-    // now, before we actually start reading data, we need to write the header to the file.
-    // open the file. note that only one file can be open at a time,
-    // so you have to close this one before opening another.
-    File dataFile = SD.open("datalog.csv", FILE_WRITE);
+    //Turn on LED to show setup is ok and play a tune
+    digitalWrite(LED_1, HIGH);
+    tone(BUZZER, 1000, 1000);
+    delay(250);
+    tone(BUZZER, 2000, 1000);
+    delay(250);
+    tone(BUZZER, 3000, 1000);
+    delay(250);
+    noTone(BUZZER);
+}
+
+void write(String data) {
+    if((firstBoot == true)) { //Check if the data file already exists and create a new one if it does
+        firstBoot = false;
+        //Serial.println("Data file already exists, creating a new one");
+        int i = 1;
+        while (SD.exists(defaultDataFileName + String(i) + ".csv")) {
+            i++;
+        }
+        dataPath = defaultDataFileName + String(i) + ".csv";
+        File dataFile = SD.open(dataPath, FILE_WRITE);
+        if (!dataFile) { 
+            Serial.println("Error opening file");
+            while (1) { //Warning if the SD Card isn't found
+                tone(BUZZER, 1000, 2000);
+                digitalWrite(LED_2, HIGH);
+                delay(2000);
+                noTone(BUZZER);
+                digitalWrite(LED_2, LOW);
+                delay(2000);
+            }
+        } else {
+            dataFile.println(header);
+            dataFile.close();
+        } //Write the first message to the file
+    }
+    File dataFile = SD.open(dataPath, FILE_WRITE);
     if (dataFile) {
-        dataFile.println(header);
+        dataFile.println(data);
         dataFile.close();
     } else {
-        Serial.println("error opening datalog.csv");
+        Serial.println("Error opening file");
+        while (1) { //Warning if the file can't be written.
+          tone(BUZZER, 1000, 2000);
+          digitalWrite(LED_2, HIGH);
+          delay(2000);
+          noTone(BUZZER);
+          digitalWrite(LED_2, LOW);
+          delay(2000);
+        }
     }
+}   
+
+String takeReadings() { //Should be about 10ms to sample ADCs
+    int tmp_raw = analogRead(TMP_PIN);
+    int pres_raw = analogRead(PRES_PIN);
+    int bat_raw = analogRead(BAT_PIN);
+    int x_raw = analogRead(IMU_X);
+    int y_raw = analogRead(IMU_Y);
+    int z_raw = analogRead(IMU_Z);
+
+    String dataString = 
+        String(millis()) + "," + 
+        String(tmp_raw) + "," + 
+        String(bat_raw) + "," + 
+        String(pres_raw) + "," + 
+        String(x_raw) + "," + 
+        String(y_raw) + "," + 
+        String(z_raw);
+    
+    return dataString;
 }
 
 void loop() {
-
-    // Note: in future labs, you may need to change this to add additional sensors.
-
-    int tmpVal = analogRead(tmpPin);
-    int presVal = analogRead(presPin);
-    int vDivVal = analogRead(vDivPin);
-    int XVal = analogRead(aX);
-    int YVal = analogRead(aY);
-    int ZVal = analogRead(aZ);
-
-    // Now let's make a nice string to write to the file.
-    // This is a comma-separated value (csv) file, so we need to separate each value with a comma.
-    String dataString = "";
-    // add the time (since boot) in milliseconds
-    dataString += String(millis());
-    dataString += ",";
-    // add the raw TMP36 value
-    dataString += String(tmpVal);
-    dataString += ",";
-    // pressure sensor value
-    dataString += String(presVal);
-    dataString += ",";
-    // Accelerometer values
-    dataString += String(XVal);
-    dataString += ",";
-    dataString += String(ZVal);
-    dataString += ",";
-    dataString += String(YVal);
-    dataString += ",";
-    // add the raw voltage divider value
-    dataString += String(vDivVal);
-
-    // now let's open the file again
-    File dataFile = SD.open("datalog.csv", FILE_WRITE);
-    // if the file is available, write to it:
-    if (dataFile) {
-        dataFile.println(dataString);
-        dataFile.close();
-
-        // print to the serial port too:
-        // Serial.println(dataString);
-    }
-    // if the file isn't open, pop up an error:
-    else {
-        Serial.println("error opening datalog.txt");
+    if (millis() % readingInterval == 0) { //Take readings every 10ms
+        digitalWrite(LED_1, !digitalRead(LED_1)); //Heartbeat LED
+        String data = takeReadings();
+        write(data);
     }
 
-    delay(500);
+  // flush sd card file outputs
+
+  // do LED and buzzer things
+
+  // For LED: you have 6 different LEDs at your disposal. You must at a minimum
+  // 1. Communicate power status of board (ie on/off)
+  // 2. Communicate when a countdown has been initiated and roughly how long
+  //    until data recording begins
+  // 3. Communicate when data recording is in progress
+
+  // For Buzzer: 
+  // - In general, mirroring LED requirements 2&3 may help you know
+  //  the status of your rocket even if you can't see the LEDs
+  // - You MUST have your buzzer making loud and frequent noises after landing
+  //  following the launch to add in locating your rocket payload
+  // - You will need to utilize some of your sensor data to know when the
+  //  rocket has landed. What sensor(s) you use to determine this is 100% up to
+  //  you. For example, if you had an altitude sensor you could check your
+  //  altitude in every loop and see if it was similar to the altitude when
+  //  launch occurred and turn on the buzzer then. You will need to test this
+  //  thouroughly before launch day as it is how we will find hiding rockets.
+  // - Points may be deducted if your rocket is especially annoying and buzzing
+  //  frequently during the launch preperation and countdown period in front of
+  //  the teaching staff
 }
