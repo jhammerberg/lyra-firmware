@@ -35,12 +35,13 @@
 // ----------------------------------------------------------------------------
 
 const bool activeTone = true; //If a tone will play while recording data
-int startupTime = 30; //seconds
+int startupTime = 30; //seconds until data will be collected
 const int readingInterval = 5; //ms (cannot be lower than 1ms, lower values have more error)
 const String header = "Time (ms),TMP36 (Raw),Voltage (Raw),Pressure (Raw), Accel X (Raw), Accel Y (Raw), Accel Z (Raw)";
-const String defaultDataFileName = "data";
+const String defaultDataFileName = "data"; //Default name for the file to contain the data (This will then be iterated if the file already exists eg; DATA1, DATA2)
 String dataPath = defaultDataFileName + ".csv"; //ok not a constant cause this needs to be changed
 
+// Read analong pins and return a string of the data
 String takeReadings() {
   int tmp_raw = analogRead(TMP_PIN);
   int pres_raw = analogRead(PRES_PIN);
@@ -70,13 +71,13 @@ void setup() {
   pinMode(LED_4, OUTPUT);
   pinMode(LED_5, OUTPUT);
   pinMode(LED_6, OUTPUT);
-  Serial.begin(9600);
-  delay(100); // Delay for serial monitor
+  Serial.begin(9600); //Start serial communication
 
+  //SD Card setup
   Serial.print("Initializing SD card...");
   if (!SD.begin(SD_CS)) {
       Serial.println("Card failed, or not present");
-      while (1) { //Warning if the SD Card isn't found
+      while (1) { //Warning tone and lights if the SD Card isn't found
           tone(BUZZER, 1000, 2000);
           digitalWrite(LED_2, HIGH);
           delay(2000);
@@ -98,7 +99,7 @@ void setup() {
   //Write the header & check if the file is open-able
   if (!dataFile) { 
       Serial.println("Error opening file");
-      while (1) { //Warning if the SD Card isn't found
+      while (1) { //Warning tone and lights if the file can't be opened
           tone(BUZZER, 1000, 2000);
           digitalWrite(LED_2, HIGH);
           delay(2000);
@@ -142,7 +143,7 @@ void loop() {
   File dataFile = SD.open(dataPath, FILE_WRITE);
   if (!dataFile) {
     Serial.println("Error opening file");
-    while (1) { //Warning if the file can't be written.
+    while (1) { //Warning if the file can't be opened. (Incase something happens to the file inbetween setup and loop)
       tone(BUZZER, 1000, 2000);
       digitalWrite(LED_2, HIGH);
       delay(2000);
@@ -151,16 +152,16 @@ void loop() {
       delay(2000);
     }
   } else {
-    dataFile.println(header);
+    dataFile.println(header); //Write the header to the file
     while (1) { //Yes this is a loop inside of a loop but I had to do it so the SD card can be closed.
       if (millis() % readingInterval == 1) { //Take readings every reading interval + or - 1ms
-        String data = takeReadings();
-        dataFile.println(data);
+        String data = takeReadings(); //Take readings
+        dataFile.println(data); //Write readings to the file
       }
       if (millis() % 100 == 1) { //Every 100ms write to the SD card
-        dataFile.flush(); //Writes data from buffer to the SD card without having to close and reopen it
+        dataFile.flush(); //Writes data from buffer to the SD card without having to close and reopen the struct
       }
     }
-    dataFile.close();
+    dataFile.close(); //Close the file
   }
 }
