@@ -16,3 +16,7 @@ Code for the Arduino Nano flight computer onboard team Lyra's Engineering 100 se
 
 ## How to use
 Flash the code using the Arduino IDE. The program will only start collecting data when it detects an SD card and can succesfully write data to it without any other problems. However, due to our sensors being analog, there is no check to make sure your sensor connections are working so make sure your modules are attached.
+
+#
+**Team:** Genevieve Rishikof, Abi Parivakkam, Jack Hammerberg, Mateo Castillo\
+**Developer:** Jack Hammerberg
